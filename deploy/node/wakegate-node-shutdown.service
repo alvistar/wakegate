@@ -1,0 +1,17 @@
+# Marks the Node sleeping when the machine shuts down or reboots, so a planned
+# restart does not page. ExecStop runs while the network is still up because
+# the unit is ordered after network-online.target (units stop in reverse order).
+# wakegate-node run clears the label again after boot.
+[Unit]
+Description=wakegate-node: mark the Node sleeping on shutdown
+After=network-online.target k3s-agent.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+ExecStop=/usr/local/bin/wakegate-node mark sleeping --timeout 5s
+
+[Install]
+WantedBy=multi-user.target

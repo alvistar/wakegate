@@ -1,0 +1,15 @@
+[Unit]
+Description=wakegate-node: suspend this on-demand node when idle
+Documentation=https://github.com/alvistar/wakegate
+After=network-online.target k3s-agent.service
+Wants=network-online.target
+
+[Service]
+# Root: it reads the kubelet's credentials, lists logind and DCV sessions and
+# calls systemctl suspend.
+ExecStart=/usr/local/bin/wakegate-node run
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: wakegate
+  namespace: wakegate
+---
+# Nodes are cluster-scoped: read the on-demand node's Ready condition and cordon.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wakegate-nodes
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: wakegate-nodes
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: wakegate-nodes}
+subjects: [{kind: ServiceAccount, name: wakegate, namespace: wakegate}]
+---
+# Pods only in the namespace wakegate watches (--namespaces): annotate, pin and ungate.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: wakegate-pods
+  namespace: gh-runner
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  - apiGroups: ["events.k8s.io"]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: wakegate-pods
+  namespace: gh-runner
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: wakegate-pods}
+subjects: [{kind: ServiceAccount, name: wakegate, namespace: wakegate}]

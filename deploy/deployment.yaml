@@ -1,0 +1,51 @@
+# Example: replace the node names, the gate, the MAC and the broadcast address.
+# One replica, on the host network of the always-on node: a Wake-on-LAN magic
+# packet is an L2 broadcast, and a pod-network packet is routed, so it would
+# never reach the sleeping NIC. The host network is why the metrics and probe
+# ports are moved off the usual 8080/8081.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wakegate
+  namespace: wakegate
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: wakegate}
+  template:
+    metadata:
+      labels: {app: wakegate}
+    spec:
+      serviceAccountName: wakegate
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        kubernetes.io/hostname: server   # the always-on node, on the same L2 as the on-demand one
+      containers:
+        - name: wakegate
+          image: ghcr.io/alvistar/wakegate
+          args:
+            - --namespaces=gh-runner
+            - --gate-name=example.com/wake
+            - --ondemand-node=desktop
+            - --fallback-node=server
+            - --wol-mac=00:00:5e:00:53:01
+            - --wol-broadcast=192.0.2.255:9
+            - --wake-timeout=90s
+            - --max-ondemand-pods=2
+          ports:
+            - {name: metrics, containerPort: 18080}
+            - {name: probes, containerPort: 18081}
+          livenessProbe:
+            httpGet: {path: /healthz, port: 18081}
+          readinessProbe:
+            httpGet: {path: /readyz, port: 18081}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
