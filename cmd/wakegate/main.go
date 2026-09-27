@@ -90,6 +90,7 @@ func main() {
 
 	r := &controller.PodReconciler{
 		Client:   mgr.GetClient(),
+		Reader:   mgr.GetAPIReader(),
 		Waker:    wake.WoL{MAC: hw, Broadcast: broadcast},
 		Recorder: mgr.GetEventRecorder("wakegate"),
 		Config:   cfg,

@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"github.com/prometheus/client_golang/prometheus/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -195,5 +195,24 @@ func TestOnlyOnDemandPodsCountAgainstCapacity(t *testing.T) {
 	reconcileOnce(t, r, "p1")
 	if p := get(t, c, "p1"); p.Annotations[AnnotationTarget] != "ondemand" {
 		t.Fatalf("one on-demand pod of two allowed should not fill the node: %v", p.Annotations)
+	}
+}
+
+// A second reconcile can see a pod that the first one already pinned (the
+// cache lags the two patches). It must finish the job without counting or
+// announcing a second release.
+func TestAlreadyReleasedPodIsNotCountedTwice(t *testing.T) {
+	now := time.Now()
+	p := gatedPod("p1", map[string]string{AnnotationFirstSeen: now.UTC().Format(time.RFC3339),
+		AnnotationTarget: "ondemand", AnnotationReason: "ondemand-node-ready"})
+	p.Spec.NodeSelector = map[string]string{corev1.LabelHostname: "desktop"}
+	r, _, c := setup(t, now, p, node(true, false))
+	before := testutil.ToFloat64(Releases.WithLabelValues("ondemand", "ondemand-node-ready"))
+	reconcileOnce(t, r, "p1")
+	if HasGate(get(t, c, "p1"), gate) {
+		t.Fatal("the gate must still be removed")
+	}
+	if after := testutil.ToFloat64(Releases.WithLabelValues("ondemand", "ondemand-node-ready")); after != before {
+		t.Fatalf("release counted again: %v -> %v", before, after)
 	}
 }

@@ -60,7 +60,11 @@ type Config struct {
 
 // PodReconciler watches pods carrying the gate.
 type PodReconciler struct {
-	Client   client.Client
+	Client client.Client
+	// Reader, when set, is used for the initial read of the pod. Pass the
+	// manager's API reader: the cache can lag the two release patches, and a
+	// stale gated copy would otherwise be released a second time.
+	Reader   client.Reader
 	Waker    wake.Waker
 	Recorder events.EventRecorder
 	Config   Config
@@ -90,12 +94,21 @@ func (r *PodReconciler) now() time.Time {
 // Reconcile evaluates one gated pod.
 func (r *PodReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	logger := log.FromContext(ctx)
+	reader := r.Reader
+	if reader == nil {
+		reader = r.Client
+	}
 	var pod corev1.Pod
-	if err := r.Client.Get(ctx, req.NamespacedName, &pod); err != nil {
+	if err := reader.Get(ctx, req.NamespacedName, &pod); err != nil {
 		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
 	if !HasGate(&pod, r.Config.GateName) || pod.DeletionTimestamp != nil {
 		return reconcile.Result{}, nil
+	}
+	if pod.Annotations[AnnotationTarget] != "" {
+		// Pinned by an earlier reconcile that did not get to remove the gate:
+		// finish that release, do not count or announce it again.
+		return reconcile.Result{}, r.removeGate(ctx, &pod)
 	}
 
 	now := r.now()
@@ -167,7 +180,12 @@ func (r *PodReconciler) release(ctx context.Context, pod *corev1.Pod, target str
 		return err
 	}
 
-	orig = pod.DeepCopy()
+	return r.removeGate(ctx, pod)
+}
+
+// removeGate drops wakegate's gate and keeps any other.
+func (r *PodReconciler) removeGate(ctx context.Context, pod *corev1.Pod) error {
+	orig := pod.DeepCopy()
 	kept := pod.Spec.SchedulingGates[:0:0]
 	for _, g := range pod.Spec.SchedulingGates {
 		if g.Name != r.Config.GateName {

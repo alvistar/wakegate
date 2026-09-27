@@ -136,9 +136,9 @@ func TestNeverSuspendsWhenBusyOrBlind(t *testing.T) {
 		k      *fakeKube
 		vetoes []string
 	}{
-		"workload":            {&fakeKube{pods: 1}, nil},
-		"veto":                {&fakeKube{}, []string{"ssh session 3 open"}},
-		"cannot list pods":    {&fakeKube{podsErr: errors.New("connection refused")}, nil},
+		"workload":             {&fakeKube{pods: 1}, nil},
+		"veto":                 {&fakeKube{}, []string{"ssh session 3 open"}},
+		"cannot list pods":     {&fakeKube{podsErr: errors.New("connection refused")}, nil},
 		"cannot mark sleeping": {&fakeKube{markErr: errors.New("forbidden")}, nil},
 	}
 	for name, tc := range cases {

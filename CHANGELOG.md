@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-27
+
+### Fixed
+- A pod could be released twice, counting two releases and two `Released`
+  events: the reconcile read the pod from the informer cache, which can lag the
+  two release patches, so a second reconcile saw a stale gated copy. The pod is
+  now read from the API server, and a pod already pinned by wakegate only has
+  its gate removed. Seen on the first live Wake-on-LAN run: one pod,
+  `wakegate_releases_total` = 2.
+
+### Verified
+- End to end on a live cluster with 0.1.0: the on-demand node asleep, a runner
+  job queued, wakegate woke it with Wake-on-LAN and released the pod after 21 s;
+  the job started 34 s after it was queued and ran on the on-demand node.
+
 ## [0.1.0] - 2026-09-27
 
 ### Added
